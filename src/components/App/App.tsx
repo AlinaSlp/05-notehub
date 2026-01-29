@@ -1,35 +1,69 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useDebounce } from 'use-debounce';
+
+import css from './App.module.css';
+import { fetchNotes } from '../../services/noteService';
+import NoteList from '../NoteList/NoteList';
+import Pagination from '../Pagination/Pagination';
+import SearchBox from '../SearchBox/SearchBox';
+import Modal from '../Modal/Modal';
+import NoteForm from '../NoteForm/NoteForm';
+import Loader from '../Loader/Loader';
+
+const PER_PAGE = 12;
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const [debouncedSearch] = useDebounce(search, 500);
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['notes', page, debouncedSearch],
+    queryFn: () => fetchNotes(page, PER_PAGE, debouncedSearch || undefined),
+  });
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setPage(1);
+  };
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
+    <div className={css.app}>
+      <header className={css.toolbar}>
+        <SearchBox value={search} onChange={handleSearchChange} />
+
+        {data && data.totalPages > 1 && (
+          <Pagination
+            page={page}
+            pageCount={data.totalPages}
+            onChange={setPage}
+          />
+        )}
+
+        <button className={css.button} onClick={() => setIsModalOpen(true)}>
+          Create note +
         </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+      </header>
+
+      {isLoading && <Loader />}
+      {isError && <p>Error loading notes</p>}
+
+      {data && data.notes.length === 0 && !isLoading && (
+        <p className={css.empty}>No notes found</p>
+      )}
+
+      {data && data.notes.length > 0 && <NoteList notes={data.notes} />}
+
+      {isModalOpen && (
+        <Modal onClose={() => setIsModalOpen(false)}>
+          <NoteForm onCancel={() => setIsModalOpen(false)} />
+        </Modal>
+      )}
+    </div>
+  );
 }
 
-export default App
+export default App;
